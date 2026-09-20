@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#20252d">
+<meta name="description" content="Quản lý thu nhập và chi tiêu cá nhân">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<title>Quản lý thu chi</title>
+<style>
+@font-face {
+  font-family: "FrontFont";
+  src: url("./warehouse/front.ttf") format("truetype");
+  font-display: swap;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; min-height: 100%; }
+body {
+  font-family: "FrontFont", Arial, sans-serif;
+  background: #f3f5f8;
+  color: #1f2937;
+  overflow-x: hidden;
+}
+button, input, select { font: inherit; }
+button { border: 0; cursor: pointer; }
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.home-card {
+  width: min(520px, 100%);
+  background: #fff;
+  border-radius: 24px;
+  padding: 34px 28px;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(31,41,55,.08);
+}
+.home-icon {
+  width: 72px; height: 72px; margin: 0 auto 18px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 20px; background: #f0f3f7; font-size: 34px;
+}
+.home-card h1 { font-size: 28px; line-height: 1.2; margin-bottom: 9px; }
+.home-card p { color: #6b7280; font-size: 15px; line-height: 1.5; margin-bottom: 25px; }
+.open-modal-btn {
+  width: 100%; min-height: 54px; padding: 12px 20px;
+  border-radius: 15px; background: #20252d; color: #fff;
+  font-size: 16px; font-weight: 700;
+  transition: transform .18s ease, opacity .18s ease;
+}
+.open-modal-btn:hover { transform: translateY(-1px); opacity: .92; }
+
+/* --- THÊM ANIMATION MỚI --- */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  display: none; align-items: center; justify-content: center;
+  padding: 18px;
+}
+.modal-overlay.show { 
+  display: flex; 
+  /* Chạy 1.5s cùng gia tốc mượt với nút giả */
+  animation: overlayIn 0.8s cubic-bezier(0.2, 0, 0.1, 1) forwards; 
+}
+.modal-overlay.closing-overlay { 
+  animation: overlayOut 1s ease forwards !important; 
+}
+
+@keyframes overlayIn { 
+  from {
+    background: rgba(15, 23, 42, 0);
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+  } 
+  to {
+    background: rgba(15, 23, 42, 0.42);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+  } 
+}
+
+@keyframes overlayOut { 
+  from {
+    background: rgba(15, 23, 42, 0.42);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+  } 
+  to {
+    background: rgba(15, 23, 42, 0);
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+  } 
+}
+
+.transaction-modal {
+  width: min(760px, 100%);
+  max-height: min(92vh, 900px);
+  display: flex; flex-direction: column; overflow: hidden;
+  background: #fff; border-radius: 24px;
+  box-shadow: 0 25px 80px rgba(15,23,42,.22);
+  /* Xóa animation cũ để quản lý bằng JS */
+  animation: none; 
+  opacity: 0; /* Ẩn ban đầu chờ nút giả bung xong */
+}
+
+/* Hiệu ứng mượt mà khi đóng bảng (trượt xuống dưới và nhạt dần) */
+.transaction-modal.closing {
+  animation: modalOut 0.4s cubic-bezier(0.2, 0, 0.2, 1) forwards !important;
+}
+@keyframes modalOut {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(50px); }
+}
+
+/* Nút giả phình to (Cubic-bezier giúp tốc độ đồng đều và gia tốc dừng nhẹ) */
+.fake-morph-btn {
+  position: fixed;
+  background-color: #20252d;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  z-index: 1001;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: 
+    top 0.8s cubic-bezier(0.2, 0, 0.1, 1),
+    left 0.8s cubic-bezier(0.2, 0, 0.1, 1),
+    width 0.8s cubic-bezier(0.2, 0, 0.1, 1),
+    height 0.8s cubic-bezier(0.2, 0, 0.1, 1),
+    border-radius 0.8s cubic-bezier(0.2, 0, 0.1, 1),
+    background-color 0.5s ease, /* Đổi màu sớm hơn 1 tí */
+    color 0.5s ease; /* Chữ tối đi nhanh hơn */
+}
+.fake-morph-btn.expanded {
+  background-color: #fff;
+  color: transparent;
+}
+
+/* Animation xuất hiện các dòng từ dưới lên */
+.stagger-item {
+  opacity: 0;
+  transform: translateY(30px);
+}
+.stagger-item.animate-in {
+  /* Gia tốc dừng nhẹ 1s */
+  animation: slideUpFade 1.0s cubic-bezier(0.2, 0, 0.1, 1) forwards;
+}
+@keyframes slideUpFade {
+  to { opacity: 1; transform: translateY(0); }
+}
+/* --- KẾT THÚC THÊM ANIMATION --- */
+
+.modal-header {
+  flex-shrink: 0; display:flex; align-items:center; justify-content:space-between;
+  gap:15px; padding:20px 22px; border-bottom:1px solid #edf0f3;
+}
+.modal-title-wrap h2 { font-size:21px; line-height:1.2; margin-bottom:4px; }
+.modal-title-wrap p { color:#7b8491; font-size:13px; }
+.close-btn {
+  width:40px; height:40px; flex-shrink:0; border-radius:12px;
+  background:#f3f5f7; color:#4b5563; font-size:22px;
+}
+.modal-body { overflow-y:auto; padding:20px 22px 24px; }
+
+.date-block { margin-bottom:20px; }
+.field-label { display:block; margin-bottom:8px; color:#4b5563; font-size:13px; font-weight:700; }
+.date-input, .category-select, .note-input {
+  width:100%; min-width:0; min-height:45px; padding:9px 11px;
+  border:1px solid #e0e5ea; border-radius:11px; outline:none;
+  background:#fff; color:#1f2937;
+}
+.amount-wrap {
+  width:100%; min-width:0; min-height:45px;
+  display:flex; align-items:center; gap:6px;
+  padding:0 11px;
+  border:1px solid #e0e5ea; border-radius:11px;
+  background:#fff;
+}
+.amount-wrap:focus-within { border-color:#a4adb7; }
+.amount-input {
+  flex:1; min-width:0; min-height:43px; padding:9px 0;
+  border:0; outline:none; background:transparent; color:#1f2937;
+  text-align:right;
+}
+.amount-suffix {
+  flex:0 0 auto; color:#000000; font-size:14px;
+  white-space:nowrap; user-select:none; pointer-events:none;
+}
+.date-input { min-height:48px; background:#f9fafb; }
+.date-input:focus, .category-select:focus, .note-input:focus {
+  border-color:#a4adb7;
+}
+
+.section {
+  margin-bottom:18px; padding:17px; border:1px solid #edf0f3;
+  border-radius:18px; background:#fbfcfd;
+}
+.section:last-child { margin-bottom:0; }
+.section-heading {
+  display:flex; align-items:center; gap:9px; margin-bottom:14px;
+  font-size:16px; font-weight:800;
+}
+.section-symbol { font-size:19px; }
+.transaction-list { display:flex; flex-direction:column; gap:10px; }
+.transaction-list.list-expand {
+  overflow:hidden;
+  transition: height 0.5s cubic-bezier(0.2, 0, 0.1, 1);
+}
+.transaction-row {
+  display:grid;
+  grid-template-columns:145px minmax(130px,.75fr) minmax(180px,1fr) 40px;
+  gap:9px; align-items:center;
+  position:relative;
+}
+.transaction-row.is-removing {
+  pointer-events:none;
+  overflow:visible;
+  transition:height 0.22s ease 0.42s, opacity 0.22s ease 0.42s;
+}
+.transaction-row.is-removing::after {
+  content:"";
+  position:absolute;
+  z-index:2;
+  top:0;
+  right:0;
+  width:0;
+  height:100%;
+  background:#fbfcfd;
+  animation: eraseTrail 0.62s cubic-bezier(0.2, 0, 0.1, 1) forwards;
+}
+.transaction-row.is-removing .remove-row-btn {
+  position:relative;
+  z-index:3;
+  animation: eraseButton 0.62s cubic-bezier(0.2, 0, 0.1, 1) forwards;
+}
+.transaction-row.row-enter {
+  animation: rowEnter 0.42s cubic-bezier(0.2, 0, 0.1, 1) both;
+}
+.transaction-row.row-enter > * {
+  animation: fieldEnter 0.42s cubic-bezier(0.2, 0, 0.1, 1) both;
+}
+.transaction-row.row-enter > :nth-child(2) { animation-delay: 0.04s; }
+.transaction-row.row-enter > :nth-child(3) { animation-delay: 0.08s; }
+.transaction-row.row-enter > :nth-child(4) { animation-delay: 0.12s; }
+.transaction-row.row-enter-delayed { animation-delay: 0.3s; }
+.transaction-row.row-enter-delayed > * { animation-delay: 0.3s; }
+.transaction-row.row-enter-delayed > :nth-child(2) { animation-delay: 0.34s; }
+.transaction-row.row-enter-delayed > :nth-child(3) { animation-delay: 0.38s; }
+.transaction-row.row-enter-delayed > :nth-child(4) { animation-delay: 0.42s; }
+@keyframes rowEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes fieldEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes eraseTrail {
+  from { width:0; }
+  to { width:100%; }
+}
+@keyframes eraseButton {
+  0% { transform:translateX(0) scale(1); }
+  72% { transform:translateX(calc(var(--erase-distance) * -1)) scale(1); }
+  100% { transform:translateX(calc(var(--erase-distance) * -1)) scale(0); }
+}
+.amount-input { text-align:right; }
+.note-input::placeholder { color:#a0a8b2; }
+.remove-row-btn {
+  width:40px; height:40px; border-radius:11px;
+  background:#f1f3f5; color:#7b8491; font-size:19px;
+}
+.add-row-btn {
+  width:100%; min-height:42px; margin-top:11px;
+  border:1px dashed #cbd2d9; border-radius:11px;
+  background:#fff; color:#59636f; font-size:14px; font-weight:700;
+}
+.modal-footer {
+  flex-shrink:0; display:flex; justify-content:flex-end; gap:10px;
+  padding:15px 22px 18px; border-top:1px solid #edf0f3; background:#fff;
+}
+.cancel-btn, .save-btn {
+  min-height:46px; padding:10px 20px; border-radius:12px;
+  font-size:14px; font-weight:800;
+}
+.cancel-btn { background:#f0f2f4; color:#4b5563; }
+.save-btn { background:#20252d; color:#fff; min-width:145px; }
+.save-btn:disabled { cursor:not-allowed; opacity:.55; }
+.status {
+  display:none; margin-top:12px; padding:11px 13px;
+  border-radius:11px; font-size:13px; line-height:1.4;
+}
+.status.show { display:block; }
+.status.success { background:#eef7f0; color:#2f6b3a; }
+.status.error { background:#fff1f1; color:#9a3d3d; }
+
+@media (prefers-reduced-motion: reduce) {
+  .transaction-list.list-expand { transition: none; }
+  .transaction-row.row-enter,
+  .transaction-row.row-enter > * { animation: none; }
+  .transaction-row.is-removing,
+  .transaction-row.is-removing::after,
+  .transaction-row.is-removing .remove-row-btn { animation: none; transition: none; }
+}
+
+@media (max-width:680px) {
+  .app { padding:15px; }
+  .home-card { padding:28px 20px; }
+  .transaction-modal { max-height:94vh; border-radius:20px; }
+  .modal-header { padding:17px; }
+  .modal-body { padding:17px; }
+  .modal-footer { padding:13px 17px 16px; }
+  .section { padding:13px; }
+  .transaction-row { grid-template-columns:1fr 1fr 40px; }
+  .category-select { grid-column:1/2; }
+  .amount-input { grid-column:2/3; }
+  .note-input { grid-column:1/3; }
+  .remove-row-btn { grid-column:3/4; grid-row:1; }
+}
+@media (max-width:430px) {
+  .home-card h1 { font-size:24px; }
+  .modal-title-wrap h2 { font-size:19px; }
+  .modal-footer { display:grid; grid-template-columns:1fr 1.4fr; }
+  .cancel-btn, .save-btn { width:100%; }
+}
+</style>
+</head>
+<body>
+
+<main class="app">
+  <section class="home-card">
+    <div class="home-icon">💰</div>
+    <h1>Quản lý thu chi</h1>
+    <p>Ghi lại các khoản thu nhập và chi tiêu của bạn một cách nhanh chóng.</p>
+    <button type="button" class="open-modal-btn" id="openTransactionModal">
+      ＋ Nhập thu chi
+    </button>
+  </section>
+</main>
+
+<div class="modal-overlay" id="transactionModal" aria-hidden="true">
+  <section class="transaction-modal" role="dialog" aria-modal="true" aria-labelledby="transactionModalTitle">
+    <!-- Đã thêm class stagger-item vào các khối cần xuất hiện theo thứ tự -->
+    <header class="modal-header stagger-item">
+      <div class="modal-title-wrap">
+        <h2 id="transactionModalTitle">Nhập thu chi</h2>
+        <p>Có thể thêm nhiều khoản trong một lần lưu.</p>
+      </div>
+      <button type="button" class="close-btn" id="closeTransactionModal" aria-label="Đóng">×</button>
+    </header>
+
+    <div class="modal-body">
+      <div class="date-block stagger-item">
+        <label class="field-label" for="transactionDate">Thời gian</label>
+        <input type="date" class="date-input" id="transactionDate">
+      </div>
+
+      <section class="section stagger-item">
+        <div class="section-heading"><span class="section-symbol">💰</span><span>Thu nhập</span></div>
+        <div class="transaction-list" id="incomeList"></div>
+        <button type="button" class="add-row-btn" id="addIncomeBtn">＋ Thêm khoản thu</button>
+      </section>
+
+      <section class="section stagger-item">
+        <div class="section-heading"><span class="section-symbol">💸</span><span>Chi tiêu</span></div>
+        <div class="transaction-list" id="expenseList"></div>
+        <button type="button" class="add-row-btn" id="addExpenseBtn">＋ Thêm khoản chi</button>
+      </section>
+
+      <div class="status stagger-item" id="statusMessage" role="status"></div>
+    </div>
+
+    <footer class="modal-footer stagger-item">
+      <button type="button" class="cancel-btn" id="cancelTransactionBtn">Hủy</button>
+      <button type="button" class="save-btn" id="saveTransactionBtn">Lưu giao dịch</button>
+    </footer>
+  </section>
+</div>
+
+<script>
+const API_URL = "https://script.google.com/macros/s/AKfycbxlQFpmTZdb-Gbkn1t7M3r_o-jFkN4Z1tQta6BqfKOsXkshrpqp4MCw_UeKcH14w3Di/exec";
+
+const INCOME_TYPES = [
+  {value:"tienBaMeCho", label:"Ba mẹ cho"},
+  {value:"kiemThem", label:"Kiếm thêm"},
+  {value:"thuKhac", label:"Khác"}
+];
+
+const EXPENSE_TYPES = [
+  {value:"chiSinhHoat", label:"Chi sinh hoạt"},
+  {value:"chiAnUong", label:"Chi ăn uống"},
+  {value:"chiHocTap", label:"Chi học tập"},
+  {value:"chiDiLai", label:"Chi đi lại"},
+  {value:"chiGiaiTri", label:"Chi giải trí"}
+];
+
+const modal = document.getElementById("transactionModal");
+const modalBox = document.querySelector('.transaction-modal');
+const openBtn = document.getElementById("openTransactionModal");
+const closeBtn = document.getElementById("closeTransactionModal");
+const cancelBtn = document.getElementById("cancelTransactionBtn");
+const incomeList = document.getElementById("incomeList");
+const expenseList = document.getElementById("expenseList");
+const addIncomeBtn = document.getElementById("addIncomeBtn");
+const addExpenseBtn = document.getElementById("addExpenseBtn");
+const dateInput = document.getElementById("transactionDate");
+const saveBtn = document.getElementById("saveTransactionBtn");
+const statusMessage = document.getElementById("statusMessage");
+
+// Biến cờ chống spam nhấn nút liên tục gây lỗi animation
+let isAnimating = false;
+
+function getTodayForInput() {
+  const now = new Date();
+  return now.getFullYear() + "-" +
+    String(now.getMonth()+1).padStart(2,"0") + "-" +
+    String(now.getDate()).padStart(2,"0");
+}
+
+function createCategorySelect(types) {
+  const select = document.createElement("select");
+  select.className = "category-select";
+  select.innerHTML = types.map(t => `<option value="${t.value}">${t.label}</option>`).join("");
+  return select;
+}
+
+function addTransactionRow(list, types, expandList = false) {
+  if (expandList) {
+    list.classList.add("list-expand");
+    list.style.height = `${list.offsetHeight}px`;
+  }
+
+  const row = document.createElement("div");
+  row.className = "transaction-row";
+
+  const category = createCategorySelect(types);
+
+  const amountWrap = document.createElement("div");
+  amountWrap.className = "amount-wrap";
+
+  const amount = document.createElement("input");
+  amount.type = "text";
+  amount.inputMode = "numeric";
+  amount.autocomplete = "off";
+  amount.className = "amount-input";
+  amount.placeholder = "Số tiền";
+
+  const amountSuffix = document.createElement("span");
+  amountSuffix.className = "amount-suffix";
+  amountSuffix.textContent = "VNĐ";
+
+  amountWrap.append(amount, amountSuffix);
+
+  const note = document.createElement("input");
+  note.type = "text";
+  note.className = "note-input";
+  note.placeholder = "Ghi chú";
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "remove-row-btn";
+  remove.innerHTML = "×";
+  remove.title = "Xóa khoản này";
+  remove.addEventListener("click", () => removeTransactionRow(row, remove));
+
+  row.append(category, amountWrap, note, remove);
+  list.appendChild(row);
+  row.classList.add("row-enter");
+  if (expandList) {
+    row.classList.add("row-enter-delayed");
+    row.addEventListener("animationend", () => {
+      list.style.height = `${list.scrollHeight}px`;
+    }, {once: true});
+  }
+
+  amount.addEventListener("input", () => formatAmountInput(amount));
+}
+
+function removeTransactionRow(row, removeButton) {
+  if (row.classList.contains("is-removing")) return;
+
+  const list = row.parentElement;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduceMotion) {
+    row.remove();
+    list.style.height = "";
+    return;
+  }
+
+  const rowWidth = row.getBoundingClientRect().width;
+  const buttonWidth = removeButton.getBoundingClientRect().width;
+  list.classList.add("list-expand");
+  list.style.height = `${list.scrollHeight}px`;
+  void list.offsetHeight;
+  row.style.setProperty("--erase-distance", `${rowWidth - buttonWidth}px`);
+  row.style.height = `${row.offsetHeight}px`;
+  row.classList.remove("row-enter", "row-enter-delayed");
+  row.classList.add("is-removing");
+  removeButton.disabled = true;
+
+  requestAnimationFrame(() => {
+    row.style.height = "0px";
+    row.style.opacity = "0";
+  });
+
+  window.setTimeout(() => {
+    const currentHeight = list.getBoundingClientRect().height;
+    row.remove();
+
+    const listTransition = list.style.transition;
+    list.style.transition = "none";
+    list.style.height = "0px";
+    const newHeight = list.scrollHeight;
+    list.style.height = `${currentHeight}px`;
+    void list.offsetHeight;
+    list.style.transition = listTransition;
+    requestAnimationFrame(() => {
+      list.style.height = `${newHeight}px`;
+    });
+
+    window.setTimeout(() => {
+      list.style.height = "";
+    }, 550);
+  }, 650);
+}
+
+function formatAmountInput(input) {
+  const cursor = input.selectionStart || 0;
+  const before = input.value.slice(0, cursor);
+  const digitsBefore = (before.match(/\d/g) || []).length;
+  const raw = input.value.replace(/\D/g, "");
+
+  if (!raw) {
+    input.value = "";
+    return;
+  }
+
+  const formatted = raw.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  input.value = formatted;
+
+  let newCursor = formatted.length;
+  if (digitsBefore === 0) {
+    newCursor = 0;
+  } else {
+    let count = 0;
+    for (let i = 0; i < formatted.length; i++) {
+      if (/\d/.test(formatted[i])) {
+        count++;
+        if (count === digitsBefore) {
+          newCursor = i + 1;
+          break;
+        }
+      }
+    }
+  }
+
+  input.setSelectionRange(newCursor, newCursor);
+}
+
+function getRawAmount(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function showStatus(message, type) {
+  statusMessage.textContent = message;
+  statusMessage.className = "status stagger-item show " + type;
+}
+
+function clearStatus() {
+  statusMessage.textContent = "";
+  statusMessage.className = "status stagger-item";
+}
+
+function resetForm() {
+  dateInput.value = getTodayForInput();
+  incomeList.innerHTML = "";
+  expenseList.innerHTML = "";
+  addTransactionRow(incomeList, INCOME_TYPES);
+  addTransactionRow(expenseList, EXPENSE_TYPES);
+  clearStatus();
+}
+
+/* === LOGIC MỞ BẢNG ANIMATION === */
+function openModal() {
+  if (isAnimating) return;
+  isAnimating = true;
+
+  const btnRect = openBtn.getBoundingClientRect();
+
+  // Bật overlay lên ngay để bắt đầu animation tối dần 1.5s
+  modal.classList.remove('closing-overlay');
+  modal.classList.add("show");
+  modal.setAttribute("aria-hidden", "false");
+  
+  // Giấu bảng thật
+  modalBox.classList.remove('closing');
+  modalBox.style.opacity = '0'; 
+  
+  const modalRect = modalBox.getBoundingClientRect();
+
+  // Tạo nút giả
+  const fakeBtn = document.createElement('div');
+  fakeBtn.className = 'fake-morph-btn';
+  fakeBtn.textContent = '＋ Nhập thu chi';
+  fakeBtn.style.top = btnRect.top + 'px';
+  fakeBtn.style.left = btnRect.left + 'px';
+  fakeBtn.style.width = btnRect.width + 'px';
+  fakeBtn.style.height = btnRect.height + 'px';
+  fakeBtn.style.borderRadius = '15px';
+  document.body.appendChild(fakeBtn);
+
+  void fakeBtn.offsetWidth; // Reflow
+
+  // Chạy phình to nút giả
+  fakeBtn.classList.add('expanded');
+  fakeBtn.style.top = modalRect.top + 'px';
+  fakeBtn.style.left = modalRect.left + 'px';
+  fakeBtn.style.width = modalRect.width + 'px';
+  fakeBtn.style.height = modalRect.height + 'px';
+  fakeBtn.style.borderRadius = '24px';
+  
+  document.body.style.overflow = "hidden";
+
+  // Sau 1.5s nút giả phình xong và nền tối xong -> Hiện bảng thật
+  setTimeout(() => {
+    modalBox.style.opacity = '1';
+    fakeBtn.remove();
+
+    // Hiện từng dòng
+    const staggerItems = modalBox.querySelectorAll('.stagger-item');
+    staggerItems.forEach((item, index) => {
+      item.classList.remove('animate-in');
+      void item.offsetWidth;
+      item.style.animationDelay = `${index * 0.2}s`;
+      item.classList.add('animate-in');
+    });
+
+    const totalStaggerTime = (staggerItems.length - 1) * 200 + 1000;
+    setTimeout(() => {
+      isAnimating = false;
+    }, totalStaggerTime);
+
+  }, 800);
+}
+
+
+/* === LOGIC ĐÓNG BẢNG ANIMATION === */
+function closeModal() {
+  if (isAnimating) return; // Chống spam
+  isAnimating = true;
+
+  modalBox.classList.add('closing');
+  modal.classList.add('closing-overlay');
+
+  // Đợi animation đóng kết thúc (0.4s)
+  setTimeout(() => {
+    modal.classList.remove("show");
+    modal.classList.remove('closing-overlay');
+    modal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    
+    modalBox.classList.remove('closing');
+    modalBox.style.opacity = '0'; // Đặt lại trạng thái ẩn để lần sau bật
+    
+    // Xóa class animation của các dòng để lần mở sau mượt mà
+    const staggerItems = modalBox.querySelectorAll('.stagger-item');
+    staggerItems.forEach(item => {
+      item.classList.remove('animate-in');
+    });
+
+    isAnimating = false; // Mở khóa
+  }, 1000);
+}
+
+function collectTransactions(list) {
+  const result = [];
+  list.querySelectorAll(".transaction-row").forEach(row => {
+    const category = row.querySelector(".category-select");
+    const amount = row.querySelector(".amount-input");
+    const note = row.querySelector(".note-input");
+    const rawAmount = getRawAmount(amount.value);
+
+    if (!rawAmount) return;
+
+    result.push({
+      loai: category.value,
+      soTien: rawAmount,
+      ghiChu: note.value.trim()
+    });
+  });
+  return result;
+}
+
+async function saveTransactions() {
+  clearStatus();
+
+  if (!dateInput.value) {
+    showStatus("Vui lòng chọn thời gian.", "error");
+    return;
+  }
+
+  const giaoDich = [
+    ...collectTransactions(incomeList),
+    ...collectTransactions(expenseList)
+  ];
+
+  if (giaoDich.length === 0) {
+    showStatus("Bạn chưa nhập khoản thu hoặc chi nào.", "error");
+    return;
+  }
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Đang lưu...";
+
+  try {
+    await fetch(API_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+      },
+      body: new URLSearchParams({
+        thoiGian: dateInput.value,
+        giaoDich: JSON.stringify(giaoDich)
+      })
+    });
+
+    showStatus("Đã gửi giao dịch. Hệ thống đang lưu dữ liệu.", "success");
+
+    setTimeout(() => {
+      resetForm();
+      closeModal();
+    }, 900);
+
+  } catch (error) {
+    console.error(error);
+    showStatus("Không thể gửi dữ liệu. Vui lòng thử lại.", "error");
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Lưu giao dịch";
+  }
+}
+
+openBtn.addEventListener("click", () => {
+  resetForm();
+  openModal();
+});
+
+closeBtn.addEventListener("click", closeModal);
+cancelBtn.addEventListener("click", closeModal);
+
+addIncomeBtn.addEventListener("click", () => addTransactionRow(incomeList, INCOME_TYPES, true));
+addExpenseBtn.addEventListener("click", () => addTransactionRow(expenseList, EXPENSE_TYPES, true));
+saveBtn.addEventListener("click", saveTransactions);
+
+modal.addEventListener("click", event => {
+  if (event.target === modal) closeModal();
+});
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && modal.classList.contains("show")) closeModal();
+});
+
+// Đăng ký Service Worker để biến trang thành PWA.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js")
+      .then(registration => {
+        console.log("PWA: Service Worker đã đăng ký", registration.scope);
+      })
+      .catch(error => {
+        console.error("PWA: Không thể đăng ký Service Worker", error);
+      });
+  });
+}
+
+resetForm();
+</script>
+</body>
+</html>
